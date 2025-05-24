@@ -1,66 +1,139 @@
+// src/app/context/TownsContext.tsx
 "use client";
 
-import { createContext, useState, useEffect, useContext } from "react";
+import {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+  ReactNode,
+} from "react";
+
 export interface Town {
   id: number;
-  name: String;
-  address: String;
-  phone: String;
+  name: string;
+  address: string;
+  phone: string;
 }
+
 interface TownContextType {
   towns: Town[];
   loading: boolean;
   fetchTowns: () => Promise<void>;
-  createTown: (town: Town) => Promise<void>;
+  createTown: (town: Omit<Town, "id">) => Promise<void>;
+  updateTown: (town: Town) => Promise<void>;
+  // deleteTown: (townId: number) => Promise<void>; // If you implement delete
 }
 
 const TownContext = createContext<TownContextType | undefined>(undefined);
-export const TownProvider: React.FC<{ children: React.ReactNode }> = ({
+
+export const TownProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [towns, setTowns] = useState<Town[]>([]);
   const [loading, setLoading] = useState(true);
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  const fetchTowns = async () => {
+  const fetchTowns = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const response = await fetch(`${baseUrl}/towns`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
       });
-      if (!response.ok)
-        throw new Error("There was an error fetching the towns");
-      const data = await response.json();
 
-      setTowns(data);
+      if (!response.ok) {
+        console.error("Error fetching towns, status:", response.status);
+        throw new Error("Error fetching towns");
+      }
+
+      const data = await response.json();
+      setTowns(data as Town[]);
     } catch (error) {
       console.error("Error fetching towns:", error);
+    } finally {
+      setLoading(false);
     }
-  };
-  const createTown = async (newTown: Omit<Town, "id">) => {
-    const response = await fetch(`${baseUrl}/towns`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-      },
-      body: JSON.stringify(newTown),
-    });
+  }, [baseUrl]);
 
-    if (!response.ok) throw new Error("Failed to create town");
+  const createTown = useCallback(
+    async (newTownData: Omit<Town, "id">) => {
+      try {
+        const response = await fetch(`${baseUrl}/towns`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+          body: JSON.stringify(newTownData),
+        });
 
-    const created = await response.json();
-    setTowns((prev) => [...prev, { ...newTown, id: created.id }]);
-  };
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: "Failed to create town" }));
+          throw new Error(errorData.message || "Failed to create town");
+        }
+
+        const createdTown = await response.json();
+        setTowns((prevTowns) => [...prevTowns, createdTown]);
+      } catch (error) {
+        console.error("Error creating town:", error);
+        throw error;
+      }
+    },
+    [baseUrl]
+  );
+
+  const updateTown = useCallback(
+    async (townToUpdate: Town) => {
+      try {
+        const response = await fetch(`${baseUrl}/towns/${townToUpdate.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+          body: JSON.stringify(townToUpdate),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: "Failed to update town" }));
+          throw new Error(errorData.message || "Failed to update town");
+        }
+
+        const updatedTown = await response.json();
+        setTowns((prevTowns) =>
+          prevTowns.map((t) => (t.id === updatedTown.id ? updatedTown : t))
+        );
+      } catch (error) {
+        console.error("Error updating town:", error);
+        throw error;
+      }
+    },
+    [baseUrl]
+  );
+
   useEffect(() => {
-    fetchTowns().catch(console.error);
-  }, []);
+    if (baseUrl) {
+        fetchTowns();
+    } else {
+        console.warn("API base URL is not defined. Towns will not be fetched.");
+        setLoading(false);
+    }
+  }, [fetchTowns, baseUrl]);
 
   return (
-    <TownContext.Provider value={{ towns, fetchTowns, createTown }}>
+    <TownContext.Provider
+      value={{
+        towns,
+        loading,
+        fetchTowns,
+        createTown,
+        updateTown,
+      }}
+    >
       {children}
     </TownContext.Provider>
   );
@@ -68,6 +141,8 @@ export const TownProvider: React.FC<{ children: React.ReactNode }> = ({
 
 export const useTowns = () => {
   const context = useContext(TownContext);
-  if (!context) throw new Error("useTowns must be used within a TownProvider");
+  if (context === undefined) {
+    throw new Error("useTowns must be used within a TownProvider");
+  }
   return context;
 };
