@@ -39,7 +39,7 @@ export default function Login() {
       localStorage.setItem("access_token", data.access_token);
       router.push("/");
     } catch (err: any) {
-      setError(err.message);
+      setError("Login error, please try again later.");
       setIsLoading(false);
     }
   };

@@ -47,7 +47,7 @@ export default function SendParcel() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  const phoneRegex = /^\+?[1-9]\d{1,14}$/; // E.164 format validation
+  const phoneRegex = /^(?:\+254|07|011)\d{6,}$/;
 
   const handleAddItem = () => {
     if (!currentItem.description || !currentItem.quantity || !currentItem.weight_per_unit) {
@@ -139,7 +139,7 @@ export default function SendParcel() {
     }
   };
 
-  const isValid = 
+  const isValid =
     formData.sender_name &&
     formData.sender_phone &&
     formData.recipient_name &&
