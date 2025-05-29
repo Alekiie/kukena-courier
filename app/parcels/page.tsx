@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -35,8 +35,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Filter } from "lucide-react";
+import { FiFilter, FiRefreshCw, FiInfo, FiSend, FiCalendar, FiSearch, FiPackage, FiTruck, FiUser, FiMapPin, FiDollarSign } from "react-icons/fi";
 import { useTowns } from "../context/TownsContext";
+import { Badge } from "@/components/ui/badge";
 
 type Parcel = {
   tracking_number: string;
@@ -60,6 +61,28 @@ const VALID_PARCEL_STATUSES = [
 ] as const;
 type ParcelStatus = (typeof VALID_PARCEL_STATUSES)[number];
 
+// Status color mapping
+const statusColors = {
+  registered: "bg-yellow-100 text-yellow-800 border-yellow-200",
+  in_transit: "bg-blue-100 text-blue-800 border-blue-200",
+  delivered: "bg-green-100 text-green-800 border-green-200",
+  collected: "bg-purple-100 text-purple-800 border-purple-200"
+};
+
+const FiCheck = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+  </svg>
+);
+// Status icons
+const statusIcons = {
+  registered: <FiPackage className="w-4 h-4" />,
+  in_transit: <FiTruck className="w-4 h-4" />,
+  delivered: <FiCheck className="w-4 h-4" />,
+  collected: <FiUser className="w-4 h-4" />
+};
+
+
 export default function ParcelsPage() {
   const { towns } = useTowns();
   const [search, setSearch] = useState("");
@@ -70,10 +93,11 @@ export default function ParcelsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [selectedParcel, setSelectedParcel] = useState<Parcel | null>(null);
   const [newStatus, setNewStatus] = useState<ParcelStatus>("registered");
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
 
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -85,7 +109,7 @@ export default function ParcelsPage() {
       try {
         const token = localStorage.getItem("access_token");
         if (!token) throw new Error("Authentication token not found");
-        
+
         const response = await fetch(`${baseUrl}/parcels`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -125,18 +149,18 @@ export default function ParcelsPage() {
 
     const parcelDate = parcel.created_at?.split("T")[0] || "";
     const dateInRange = (!startDate || parcelDate >= startDate) &&
-                       (!endDate || parcelDate <= endDate);
+      (!endDate || parcelDate <= endDate);
 
-    const statusMatches = selectedStatuses.length === 0 || 
-                         selectedStatuses.includes(parcel.status as ParcelStatus);
+    const statusMatches = selectedStatuses.length === 0 ||
+      selectedStatuses.includes(parcel.status as ParcelStatus);
 
     return matchesSearch && dateInRange && statusMatches;
   });
 
-  const handleOpenStatusDialog = (parcel: Parcel) => {
+  const handleOpenDetailsDialog = (parcel: Parcel) => {
     setSelectedParcel(parcel);
     setNewStatus(parcel.status as ParcelStatus);
-    setIsStatusDialogOpen(true);
+    setIsDetailsDialogOpen(true);
     setError(null);
     setSuccessMessage(null);
   };
@@ -149,7 +173,7 @@ export default function ParcelsPage() {
     try {
       const token = localStorage.getItem("access_token");
       if (!token) throw new Error("Authentication token not found");
-      
+
       const response = await fetch(
         `${baseUrl}/parcels/${selectedParcel.tracking_number}/status`,
         {
@@ -167,13 +191,13 @@ export default function ParcelsPage() {
         throw new Error(errorData.message || "Status update failed");
       }
 
-      setParcels(prev => prev.map(p => 
+      setParcels(prev => prev.map(p =>
         p.tracking_number === selectedParcel.tracking_number
           ? { ...p, status: newStatus }
           : p
       ));
       setSuccessMessage("Status updated successfully!");
-      setIsStatusDialogOpen(false);
+      setIsDetailsDialogOpen(false);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -181,210 +205,578 @@ export default function ParcelsPage() {
     }
   };
 
+  const handleSendMessage = async () => {
+    if (!selectedParcel) return;
+
+    setIsSendingMessage(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const token = localStorage.getItem("access_token");
+      if (!token) throw new Error("Authentication token not found");
+
+      const response = await fetch(
+        `${baseUrl}/parcels/${selectedParcel.tracking_number}/send-message`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            recipient_phone: selectedParcel.recipient_phone,
+            message_type: "delivery_confirmation",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to send message");
+      }
+
+      setSuccessMessage("Delivery message sent successfully!");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const refreshData = () => {
+    if (baseUrl) {
+      setLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+      const token = localStorage.getItem("access_token");
+      fetch(`${baseUrl}/parcels`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(response => {
+          if (!response.ok) throw new Error("Failed to fetch parcels");
+          return response.json();
+        })
+        .then(data => setParcels(data))
+        .catch(err => setError(err.message))
+        .finally(() => setLoading(false));
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setStartDate("");
+    setEndDate("");
+    setSelectedStatuses([]);
+  };
+
   if (!baseUrl) return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4 text-center">
-      <Alert variant="destructive">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-10 px-4 text-center">
+      <Alert variant="destructive" className="max-w-2xl mx-auto">
         <AlertTitle>Configuration Error</AlertTitle>
         <AlertDescription>API base URL not configured</AlertDescription>
       </Alert>
     </div>
   );
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4 text-center">
-      Loading parcels...
-    </div>
-  );
-
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+              <FiTruck className="text-indigo-600 w-6 h-6" />
+              <span className="bg-gradient-to-r from-indigo-600 to-blue-500 bg-clip-text text-transparent">
+                Cargo Traffic Dashboard
+              </span>
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Monitor and manage parcel shipments in real-time
+            </p>
+          </div>
+          <Button
+            onClick={refreshData}
+            disabled={loading}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+          >
+            <FiRefreshCw className={`${loading ? "animate-spin" : ""}`} />
+            Refresh Data
+          </Button>
+        </div>
+
+        {/* Stats Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="border border-indigo-100 bg-indigo-50 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-indigo-600 font-medium">Total Parcels</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{parcels.length}</p>
+              </div>
+              <div className="bg-indigo-100 p-3 rounded-full">
+                <FiPackage className="text-indigo-600 w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-blue-100 bg-blue-50 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-600 font-medium">In Transit</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {parcels.filter(p => p.status === "in_transit").length}
+                </p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-full">
+                <FiTruck className="text-blue-600 w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-green-100 bg-green-50 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-600 font-medium">Delivered</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {parcels.filter(p => p.status === "delivered").length}
+                </p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-full">
+                <FiCheck className="text-green-600 w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border border-purple-100 bg-purple-50 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-purple-600 font-medium">Collected</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {parcels.filter(p => p.status === "collected").length}
+                </p>
+              </div>
+              <div className="bg-purple-100 p-3 rounded-full">
+                <FiUser className="text-purple-600 w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Status Messages */}
         {error && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="border-red-300">
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {successMessage && (
-          <Alert className="bg-green-100 border-green-300 text-green-700">
+          <Alert className="bg-green-50 border-green-300 text-green-800">
             <AlertTitle>Success</AlertTitle>
             <AlertDescription>{successMessage}</AlertDescription>
           </Alert>
         )}
 
-        <Card className="shadow-sm">
-          <CardHeader className="flex flex-col gap-4">
-            <div className="flex items-center justify-between w-full">
-              <CardTitle className="text-xl">
-                Sent Parcels ({filteredParcels.length})
+        {/* Filters Card */}
+        <Card className="border border-gray-200 bg-white shadow-sm">
+          <CardHeader className="pb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <CardTitle className="text-lg flex items-center gap-2 text-gray-800">
+                <FiFilter className="text-indigo-600" />
+                Filter Parcels
               </CardTitle>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="bg-blue-600">
-                    <Filter className="w-4 h-4 mr-2 text-xl "  />
-                    Filter
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-60">
-                  <div className="space-y-4">
-                    <Label className="block font-medium">Status Filter</Label>
-                    {VALID_PARCEL_STATUSES.map(status => (
-                      <div key={status} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={status}
-                          checked={selectedStatuses.includes(status)}
-                          onCheckedChange={checked =>
-                            handleStatusFilterChange(status, !!checked)
-                          }
-                        />
-                        <Label htmlFor={status} className="capitalize">
-                          {status.replace('_', ' ')}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="w-full space-y-2">
-              <Input
-                placeholder="Search parcels..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-              <div className="flex flex-col md:flex-row gap-2">
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  placeholder="Start date"
-                />
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  placeholder="End date"
-                />
+              <div className="flex items-center gap-3">
+                <div className="text-sm text-gray-500">
+                  Showing <span className="font-medium text-indigo-600">{filteredParcels.length}</span> of{" "}
+                  <span className="font-medium">{parcels.length}</span> parcels
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="text-gray-600 hover:text-indigo-600"
+                >
+                  Clear Filters
+                </Button>
               </div>
             </div>
           </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div>
+                <Label className="text-sm text-gray-600 mb-1 block">Search Parcels</Label>
+                <div className="relative">
+                  <FiSearch className="absolute left-3 top-3.5 text-gray-400" />
+                  <input
+                    placeholder="Tracking, sender, receiver..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-10 p-3 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+                  />
+                </div>
+              </div>
 
-          <CardContent className="overflow-x-auto">
-            <Table className="">
-              <TableHeader className="bg-slate-400 font-bold rounded-md" >
-                <TableRow className="">
-                  <TableHead>Tracking ID</TableHead>
-                  <TableHead>Sender</TableHead>
-                  <TableHead>Receiver</TableHead>
-                  <TableHead>Origin</TableHead>
-                  <TableHead>Destination</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Weight</TableHead>
-                  <TableHead>Payment</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
+              <div>
+                <Label className="text-sm text-gray-600 mb-1 block">From Date</Label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="w-full p-3 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-600 mb-1 block">To Date</Label>
+                <div className="relative">
+
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="w-full p-3 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-sm text-gray-600 mb-1 block">Status Filter</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full pl-10 p-3 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+                    >
+                      <FiFilter className="mr-2" />
+                      {selectedStatuses.length > 0
+                        ? `${selectedStatuses.length} selected`
+                        : "All statuses"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-60 p-4 border border-gray-200">
+                    <div className="space-y-3">
+                      {VALID_PARCEL_STATUSES.map(status => (
+                        <div key={status} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={status}
+                            checked={selectedStatuses.includes(status)}
+                            onCheckedChange={checked =>
+                              handleStatusFilterChange(status, !!checked)
+                            }
+                          />
+                          <Label htmlFor={status} className="capitalize text-sm flex items-center gap-2">
+                            <span className={`w-3 h-3 rounded-full ${statusColors[status].split(' ')[0]}`}></span>
+                            {status.replace('_', ' ')}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Parcels Table Card */}
+        <Card className="border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <CardContent className="p-0">
+            <Table className="border-collapse">
+              <TableHeader className="bg-indigo-50">
+                <TableRow>
+                  <TableHead className="font-semibold text-indigo-800">Tracking ID</TableHead>
+                  <TableHead className="font-semibold text-indigo-800">Sender</TableHead>
+                  <TableHead className="font-semibold text-indigo-800">Receiver</TableHead>
+                  <TableHead className="font-semibold text-indigo-800">Route</TableHead>
+                  <TableHead className="font-semibold text-indigo-800">Date</TableHead>
+                  <TableHead className="font-semibold text-indigo-800">Weight</TableHead>
+                  <TableHead className="font-semibold text-indigo-800">Status</TableHead>
+                  <TableHead className="font-semibold text-right text-indigo-800">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredParcels.map(parcel => (
-                  <TableRow key={parcel.tracking_number}>
-                    <TableCell className="font-medium">
-                      {parcel.tracking_number}
-                    </TableCell>
-                    <TableCell>
-                      {parcel.sender_name} ({parcel.sender_phone})
-                    </TableCell>
-                    <TableCell>
-                      {parcel.recipient_name} ({parcel.recipient_phone})
-                    </TableCell>
-                    <TableCell>
-                      {towns.find(t => t.id === parcel.origin_town_id)?.name}
-                    </TableCell>
-                    <TableCell>
-                      {towns.find(t => t.id === parcel.destination_town_id)?.name}
-                    </TableCell>
-                    <TableCell>
-                      {new Date(parcel.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>{parcel.weight} kg</TableCell>
-                    <TableCell>{parcel.payment_method}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        parcel.status === "delivered" ? "bg-green-200 text-green-800" :
-                        parcel.status === "in_transit" ? "bg-blue-200 text-blue-800" :
-                        "bg-yellow-200 text-yellow-800"
-                      }`}>
-                        {parcel.status}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenStatusDialog(parcel)}
-                      >
-                        Update Status
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredParcels.length === 0 && (
+                {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center text-gray-500 h-24">
-                      No parcels found matching your criteria
+                    <TableCell colSpan={8} className="text-center py-12">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <FiRefreshCw className="animate-spin text-indigo-600 w-8 h-8" />
+                        <p className="text-gray-600">Loading cargo data...</p>
+                      </div>
                     </TableCell>
                   </TableRow>
+                ) : filteredParcels.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-12">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <FiPackage className="text-gray-400 w-12 h-12" />
+                        <h3 className="text-lg font-medium text-gray-900">No shipments found</h3>
+                        <p className="text-gray-500">
+                          Try adjusting your search or filter criteria
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredParcels.map(parcel => (
+                    <TableRow
+                      key={parcel.tracking_number}
+                      className="hover:bg-indigo-50 border-b border-gray-100"
+                    >
+                      <TableCell className="font-medium text-blue-600">
+                        {parcel.tracking_number}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{parcel.sender_name}</div>
+                        <div className="text-sm text-gray-500">{parcel.sender_phone}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{parcel.recipient_name}</div>
+                        <div className="text-sm text-gray-500">{parcel.recipient_phone}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm">
+                          <span className="text-gray-600">
+                            {towns.find(t => t.id === parcel.origin_town_id)?.name || "N/A"}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="font-medium">
+                            {towns.find(t => t.id === parcel.destination_town_id)?.name || "N/A"}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {new Date(parcel.created_at).toLocaleDateString()}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(parcel.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{parcel.weight} kg</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${statusColors[parcel.status as ParcelStatus]}`}>
+                          {statusIcons[parcel.status as ParcelStatus]}
+                          {parcel.status.replace('_', ' ')}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenDetailsDialog(parcel)}
+                          className="flex items-center gap-1 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                        >
+                          <FiInfo className="w-4 h-4" />
+                          Details
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>
           </CardContent>
+          <CardFooter className="bg-indigo-50 px-6 py-3 border-t border-indigo-100">
+            <div className="text-sm text-indigo-800">
+              Showing <span className="font-medium">{filteredParcels.length}</span> of{" "}
+              <span className="font-medium">{parcels.length}</span> shipments
+            </div>
+          </CardFooter>
         </Card>
 
-        {/* Status Update Dialog */}
-        <Dialog open={isStatusDialogOpen} onOpenChange={setIsStatusDialogOpen}>
-          <DialogContent className="sm:max-w-[425px]">
+        {/* Parcel Details Dialog */}
+        <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+          <DialogContent className="sm:max-w-2xl rounded-xl border border-gray-200">
             <DialogHeader>
-              <DialogTitle>Update Parcel Status</DialogTitle>
+              <DialogTitle className="flex items-center gap-2 text-gray-800">
+                <FiPackage className="text-indigo-600" />
+                <span>Shipment Details</span>
+              </DialogTitle>
             </DialogHeader>
             {selectedParcel && (
-              <form onSubmit={handleStatusUpdate}>
-                <div className="grid gap-4 py-4">
-                  <p>Tracking ID: <strong>{selectedParcel.tracking_number}</strong></p>
-                  <p>Current Status: <strong>{selectedParcel.status}</strong></p>
-                  <div className="space-y-2">
-                    <Label htmlFor="newStatus">New Status</Label>
-                    <Select
-                      value={newStatus}
-                      onValueChange={value => setNewStatus(value as ParcelStatus)}
-                    >
-                      <SelectTrigger id="newStatus">
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {VALID_PARCEL_STATUSES.map(status => (
-                          <SelectItem key={status} value={status}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                <div className="space-y-4">
+                  <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-indigo-100 p-2 rounded-full">
+                        <FiPackage className="text-indigo-600 w-5 h-5" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">Shipment Information</h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs text-gray-500 uppercase tracking-wider">Tracking Number</Label>
+                        <p className="font-medium text-indigo-600">{selectedParcel.tracking_number}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs text-gray-500 uppercase tracking-wider">Date Sent</Label>
+                          <p>{new Date(selectedParcel.created_at).toLocaleDateString()}</p>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-gray-500 uppercase tracking-wider">Weight</Label>
+                          <p>{selectedParcel.weight} kg</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label className="text-xs text-gray-500 uppercase tracking-wider">Payment Method</Label>
+                          <p className="capitalize font-medium">{selectedParcel.payment_method.replace(/_/g, ' ')}</p>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-gray-500 uppercase tracking-wider">Current Status</Label>
+                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${statusColors[selectedParcel.status as ParcelStatus]}`}>
+                            {statusIcons[selectedParcel.status as ParcelStatus]}
+                            {selectedParcel.status.replace('_', ' ')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-gray-100 p-2 rounded-full">
+                        <FiMapPin className="text-gray-600 w-5 h-5" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">Route Information</h3>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm text-gray-600 mb-1">Origin</Label>
+                        <p className="font-medium">
+                          {towns.find(t => t.id === selectedParcel.origin_town_id)?.name || "N/A"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm text-gray-600 mb-1">Destination</Label>
+                        <p className="font-medium">
+                          {towns.find(t => t.id === selectedParcel.destination_town_id)?.name || "N/A"}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-center my-2">
+                        <div className="h-0.5 bg-gray-200 w-full relative">
+                          <div className="absolute left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gray-300 rounded-full w-6 h-6 flex items-center justify-center">
+                            <FiTruck className="text-gray-600 w-4 h-4" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button
-                    type="submit"
-                    disabled={isSubmittingStatus || newStatus === selectedParcel.status}
-                  >
-                    {isSubmittingStatus ? "Saving..." : "Save Changes"}
-                  </Button>
-                </DialogFooter>
-              </form>
+
+                <div className="space-y-4">
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-blue-100 p-2 rounded-full">
+                        <FiUser className="text-blue-600 w-5 h-5" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">Sender Information</h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs text-gray-500 uppercase tracking-wider">Name</Label>
+                        <p className="font-medium">{selectedParcel.sender_name}</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs text-gray-500 uppercase tracking-wider">Phone</Label>
+                        <p className="text-blue-600">{selectedParcel.sender_phone}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-green-100 p-2 rounded-full">
+                        <FiUser className="text-green-600 w-5 h-5" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">Receiver Information</h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs text-gray-500 uppercase tracking-wider">Name</Label>
+                        <p className="font-medium">{selectedParcel.recipient_name}</p>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs text-gray-500 uppercase tracking-wider">Phone</Label>
+                        <p className="text-green-600">{selectedParcel.recipient_phone}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="bg-indigo-100 p-2 rounded-full">
+                        <FiRefreshCw className="text-indigo-600 w-5 h-5" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-800">Update Status</h3>
+                    </div>
+
+                    <form onSubmit={handleStatusUpdate} className="space-y-4">
+                      <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex-1">
+                          <Label className="text-sm text-gray-600 mb-1 block">New Status</Label>
+                          <Select
+                            value={newStatus}
+                            onValueChange={value => setNewStatus(value as ParcelStatus)}
+                            disabled={isSubmittingStatus}
+                          >
+                            <SelectTrigger className="w-full border-gray-300">
+                              <SelectValue placeholder="Select new status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {VALID_PARCEL_STATUSES.map(status => (
+                                <SelectItem key={status} value={status}>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${statusColors[status].split(' ')[0]}`}></span>
+                                    {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          type="submit"
+                          disabled={isSubmittingStatus || newStatus === selectedParcel.status}
+                          className="md:mt-0 w-full md:w-auto bg-indigo-600 hover:bg-indigo-700"
+                        >
+                          {isSubmittingStatus ? "Updating..." : "Update Status"}
+                        </Button>
+                      </div>
+                    </form>
+
+                    {selectedParcel.status === "delivered" && (
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={isSendingMessage}
+                        className="mt-4 w-full bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                      >
+                        <FiSend className="w-4 h-4" />
+                        {isSendingMessage ? "Sending..." : "Notify Receiver"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline" className="border-gray-300">Close</Button>
+              </DialogClose>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

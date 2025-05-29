@@ -1,8 +1,8 @@
 // src/app/towns/page.tsx
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
-import { PlusCircle, Pencil, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { FiPlus, FiEdit2, FiTrash2, FiMapPin, FiPhone, FiHome } from "react-icons/fi";
 import {
   Table,
   TableBody,
@@ -24,39 +24,35 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTowns, Town } from "../context/TownsContext";
+import { Badge } from "@/components/ui/badge";
 
-// Props for the TownDialog component
 interface TownDialogProps {
-  // `null` for adding new, `Town` object for editing
   initialTownData: Town | null;
   onSave: (town: { id?: number; name: string; phone: string; address: string }) => Promise<void>;
-  onClose: () => void; // Callback to close the dialog from parent
+  onClose: () => void;
 }
 
 const TownDialog = ({
   initialTownData,
   onSave,
-  onClose, // Receive onClose prop
+  onClose,
 }: TownDialogProps) => {
-  // Use a default empty object for new towns, or the initialTownData for editing
   const [town, setTown] = useState(initialTownData || { name: "", phone: "", address: "" });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Update local state if initialTownData prop changes (e.g., when editing a different town, or opening for add after edit)
   useEffect(() => {
     setTown(initialTownData || { name: "", phone: "", address: "" });
-    setError(null); // Clear errors on dialog open/data change
+    setError(null);
   }, [initialTownData]);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
     try {
       await onSave(town);
-      onClose(); // Call the onClose function passed from the parent to close the dialog
-      // No need to reset town state here if onClose unmounts/re-initializes the dialog
+      onClose();
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred. Please try again.");
     } finally {
@@ -67,25 +63,27 @@ const TownDialog = ({
   const isEditing = initialTownData && initialTownData.id;
 
   return (
-    <DialogContent className="sm:max-w-md">
+    <DialogContent className="sm:max-w-md rounded-xl border border-gray-200 shadow-xl">
       <DialogHeader>
-        <DialogTitle className="text-gray-800">
-          {isEditing ? "Edit Town" : "Create New Town"}
+        <DialogTitle className="text-gray-800 flex items-center gap-2">
+          <FiMapPin className="text-indigo-600" />
+          {isEditing ? "Edit Town Branch" : "Create New Town Branch"}
         </DialogTitle>
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Town Name</Label>
+          <Label htmlFor="name" className="text-gray-700">Town Name</Label>
           <Input
             id="name"
             required
             value={town.name}
             onChange={(e) => setTown({ ...town, name: e.target.value })}
             disabled={isSubmitting}
+            className="border-gray-300"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="phone">Contact Number</Label>
+          <Label htmlFor="phone" className="text-gray-700">Contact Number</Label>
           <Input
             id="phone"
             type="tel"
@@ -94,27 +92,43 @@ const TownDialog = ({
             onChange={(e) => setTown({ ...town, phone: e.target.value })}
             placeholder="Format: +254712345678"
             disabled={isSubmitting}
+            className="border-gray-300"
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="address">Full Address</Label>
+          <Label htmlFor="address" className="text-gray-700">Full Address</Label>
           <Input
             id="address"
             required
             value={town.address}
             onChange={(e) => setTown({ ...town, address: e.target.value })}
             disabled={isSubmitting}
+            className="border-gray-300"
           />
         </div>
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <div className="flex justify-end gap-4">
+        {error && <p className="text-red-500 text-sm py-2">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
           <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={isSubmitting}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              className="border-gray-300"
+            >
               Cancel
             </Button>
           </DialogClose>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? (isEditing ? "Saving..." : "Creating...") : (isEditing ? "Save Changes" : "Create Town")}
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                {isEditing ? "Saving..." : "Creating..."}
+              </span>
+            ) : isEditing ? "Save Changes" : "Create Branch"}
           </Button>
         </div>
       </form>
@@ -124,7 +138,6 @@ const TownDialog = ({
 
 export default function TownsPage() {
   const { towns, createTown, updateTown, loading, fetchTowns } = useTowns();
-  // State to control the single dialog: null (closed), "add" (for new), or a Town object (for editing)
   const [dialogState, setDialogState] = useState<"add" | Town | null>(null);
 
   const handleApiError = (error: any, action: string) => {
@@ -132,118 +145,161 @@ export default function TownsPage() {
     alert(`Could not ${action} town: ${error.message || "Unknown error"}`);
   };
 
-  const handleOpenAddDialog = () => {
-    setDialogState("add");
-  };
-
-  const handleOpenEditDialog = (town: Town) => {
-    setDialogState(town);
-  };
-
-  const handleCloseDialog = () => {
-    setDialogState(null);
-  };
+  const handleOpenAddDialog = () => setDialogState("add");
+  const handleOpenEditDialog = (town: Town) => setDialogState(town);
+  const handleCloseDialog = () => setDialogState(null);
 
   const handleSaveTown = async (townData: { id?: number; name: string; phone: string; address: string }) => {
     try {
       if (dialogState === "add") {
         await createTown(townData);
-      } else if (typeof dialogState === 'object' && dialogState !== null) {
-        // Ensure ID is present for an update, using the one from the dialogState (the town being edited)
+      } else if (dialogState && typeof dialogState === 'object') {
         await updateTown({ ...townData, id: dialogState.id });
       }
-      // No need to call handleCloseDialog here, onSave's success will trigger it from TownDialog
     } catch (error) {
       handleApiError(error, dialogState === "add" ? "creating" : "updating");
-      throw error; // Re-throw to allow TownDialog to show its error message
+      throw error;
     }
   };
 
-  // Determine if the dialog is open based on dialogState
   const isDialogOpen = dialogState !== null;
-
-  // Determine initial data for TownDialog based on dialogState
-  const initialTownDataForDialog = typeof dialogState === 'object' && dialogState !== null
+  const initialTownDataForDialog = dialogState && typeof dialogState === 'object'
     ? dialogState
-    : null; // Null indicates "add" mode for TownDialog
+    : null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-8">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 sm:p-6">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">All Towns</h1>
-          {/* Add New Town Button */}
-          <Button className="gap-2" onClick={handleOpenAddDialog}>
-            <PlusCircle className="w-5 h-5" />
-            Add New Town
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+              <FiMapPin className="text-indigo-600" />
+              Town Branches
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Manage all town branches where parcels are sent and received
+            </p>
+          </div>
+
+          <Button
+            onClick={handleOpenAddDialog}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+          >
+            <FiPlus className="w-4 h-4" />
+            Add New Branch
           </Button>
         </div>
 
         {/* Single Dialog for both Add and Edit */}
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          if (!open) {
-            handleCloseDialog(); // Close dialog if user clicks outside or presses escape
-          }
-        }}>
-          {isDialogOpen && ( // Only render TownDialog content when the dialog is open
+        <Dialog open={isDialogOpen} onOpenChange={open => !open && handleCloseDialog()}>
+          {isDialogOpen && (
             <TownDialog
               initialTownData={initialTownDataForDialog}
               onSave={handleSaveTown}
-              onClose={handleCloseDialog} // Pass the close handler
+              onClose={handleCloseDialog}
             />
           )}
         </Dialog>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
+        {/* Stats Card */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card className="border border-indigo-100 bg-indigo-50 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-indigo-600 font-medium">Total Branches</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">{towns.length}</p>
+              </div>
+              <div className="bg-indigo-100 p-3 rounded-full">
+                <FiMapPin className="text-indigo-600 w-5 h-5" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Towns Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <Table>
-            <TableHeader className="bg-gray-50">
+            <TableHeader className="bg-indigo-50">
               <TableRow>
-                <TableHead className="w-[200px] px-4 py-3">Town Name</TableHead>
-                <TableHead className="px-4 py-3">Contact Number</TableHead>
-                <TableHead className="px-4 py-3">Address</TableHead>
-                <TableHead className="text-right px-4 py-3">Actions</TableHead>
+                <TableHead className="font-semibold text-indigo-800 px-6 py-4">Town Name</TableHead>
+                <TableHead className="font-semibold text-indigo-800 px-6 py-4">Contact Info</TableHead>
+                <TableHead className="font-semibold text-indigo-800 px-6 py-4">Address</TableHead>
+                <TableHead className="text-right font-semibold text-indigo-800 px-6 py-4">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                Array.from({ length: 3 }).map((_, index) => (
-                  <TableRow key={`skeleton-${index}`}>
-                    <TableCell className="px-4 py-3"><Skeleton className="h-5 w-3/4" /></TableCell>
-                    <TableCell className="px-4 py-3"><Skeleton className="h-5 w-3/4" /></TableCell>
-                    <TableCell className="px-4 py-3"><Skeleton className="h-5 w-full" /></TableCell>
-                    <TableCell className="text-right px-4 py-3">
+                Array.from({ length: 4 }).map((_, index) => (
+                  <TableRow key={`skeleton-${index}`} className="border-b border-gray-100">
+                    <TableCell className="px-6 py-4">
+                      <Skeleton className="h-4 w-3/4" />
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <Skeleton className="h-4 w-1/2" />
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                    <TableCell className="px-6 py-4 text-right">
                       <Skeleton className="h-8 w-20 ml-auto" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : towns.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-gray-500 px-4 py-3">
-                    No towns found. Try adding a new one!
+                  <TableCell colSpan={4} className="text-center py-12 px-6">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="bg-gray-100 p-4 rounded-full">
+                        <FiMapPin className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900">No town branches found</h3>
+                      <p className="text-gray-500 max-w-md">
+                        Add your first town branch to start managing parcel operations
+                      </p>
+                      <Button
+                        onClick={handleOpenAddDialog}
+                        className="mt-3 flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        <FiPlus className="w-4 h-4" />
+                        Add New Branch
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
                 towns.map((town) => (
-                  <TableRow key={town.id} className="hover:bg-gray-50 transition-colors">
-                    <TableCell className="font-medium px-4 py-3">{town.name}</TableCell>
-                    <TableCell className="px-4 py-3">{town.phone}</TableCell>
-                    <TableCell className="px-4 py-3">{town.address}</TableCell>
-                    <TableCell className="text-right px-4 py-3">
+                  <TableRow key={town.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <TableCell className="font-medium px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-indigo-100 p-2 rounded-lg">
+                          <FiMapPin className="text-indigo-600 w-5 h-5" />
+                        </div>
+                        <span className="font-medium text-gray-800">{town.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <FiPhone className="text-gray-500" />
+                        {town.phone}
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      <div className="flex items-start gap-2">
+                        <FiHome className="text-gray-500 mt-0.5 flex-shrink-0" />
+                        <span className="text-gray-600">{town.address}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right px-6 py-4">
                       <div className="flex gap-2 justify-end">
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="text-gray-600 hover:text-gray-900"
+                          className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2"
                           onClick={() => handleOpenEditDialog(town)}
                         >
-                          <Pencil className="w-4 h-4 mr-2" />
+                          <FiEdit2 className="w-4 h-4" />
                           Edit
                         </Button>
-                        {/* Placeholder for Delete Button */}
-                        {/* <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-800" onClick={() => handleDeleteTown(town.id)}>
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </Button> */}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -256,3 +312,16 @@ export default function TownsPage() {
     </div>
   );
 }
+
+// Card components for better structure
+const Card = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={`rounded-xl border ${className}`}>
+    {children}
+  </div>
+);
+
+const CardContent = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <div className={`p-4 ${className}`}>
+    {children}
+  </div>
+);

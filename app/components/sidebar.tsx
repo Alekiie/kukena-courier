@@ -13,131 +13,201 @@ import {
   FaMapMarkedAlt,
 } from "react-icons/fa";
 import Link from "next/link";
-import { MenuIcon, PersonStandingIcon } from "lucide-react";
+import { MenuIcon, PersonStandingIcon, XIcon, SearchIcon } from "lucide-react";
 import { jwtDecode, JwtPayload as DecodedJwtPayload } from "jwt-decode";
 
-// Define your specific JWT payload interface for better type safety
 interface CustomJwtPayload extends DecodedJwtPayload {
-  name?: string;   // If your token has a 'name' claim for the full name
-  sub?: string;    // Standard "subject" claim, often used for username or user ID
+  name?: string;
+  sub?: string;
   role?: string;
   id?: number;
-  // Add any other fields from your token that you might need
 }
 
 export default function Sidebar() {
-  // isOpen state controls visibility on small screens due to `md:block` on aside
-  const [isOpen, setIsOpen] = useState(true); // Default to open on small screens
+  const [isOpen, setIsOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const [activeLink, setActiveLink] = useState("");
 
   useEffect(() => {
+    // Set active link based on current path
+    setActiveLink(window.location.pathname);
+
     const token = localStorage.getItem("access_token");
-    if (!token) {
-      console.warn("Access token not found in localStorage. Sidebar will not display user name.");
-      return;
-    }
+    if (!token) return;
 
     try {
       const decodedToken: CustomJwtPayload = jwtDecode(token);
-      // Use a 'name' claim if available and more descriptive, otherwise fallback to 'sub'
       setUserName(decodedToken.name || decodedToken.sub || "User");
     } catch (e) {
       console.error("Failed to decode token:", e);
-      // Potentially handle invalid token (e.g., sign out user)
     }
   }, []);
 
   return (
-    <aside
-      className={`bg-gray-900 text-white min-h-screen w-64 transition-all duration-300 
-                  ${isOpen ? "block" : "hidden"} md:block`}
-      // On small screens (<md breakpoint): visibility is controlled by isOpen.
-      // On md screens and up: always 'block', so isOpen toggle won't hide the sidebar itself.
-    >
-      {/* Use a flex container for the entire sidebar content to manage height and scrolling */}
-      <div className="p-4 flex flex-col h-full">
-        {/* Header Section: User Info and Toggle Button */}
-        <div className="border-b border-gray-700 pb-4 mb-4 flex justify-between items-center">
-          {/* User and Company Info */}
-          <div>
-            <div className="text-lg font-semibold truncate" title={userName || ""}>
-              {userName || "Loading..."}
+    <>
+      {/* Mobile toggle button */}
+      <button
+        onClick={() => setIsOpen(true)}
+        className="fixed top-4 left-4 z-30 p-2 rounded-lg bg-indigo-600 text-white shadow-md md:hidden"
+      >
+        <MenuIcon className="w-6 h-6" />
+      </button>
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 transition-all duration-300 ease-in-out transform
+                    bg-white shadow-xl flex flex-col border-r border-gray-200
+                    ${isOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0 md:static`}
+      >
+        <div className="p-4 flex flex-col h-full">
+          {/* Header */}
+          <div className="border-b border-gray-200 pb-4 mb-4 flex justify-between items-center">
+            <div>
+              <div className="text-lg font-bold text-gray-900 truncate">
+                {userName || "KETNO User"}
+              </div>
+              <div className="text-xs text-indigo-600 font-medium">KETNO COURIER</div>
             </div>
-            <div className="text-xs text-gray-400">KETNO COURIER</div>
+
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-gray-500 hover:text-gray-700 p-1 rounded hover:bg-gray-100 md:hidden"
+            >
+              <XIcon className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Toggle Button: Only visible and active on small screens */}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="text-white hover:text-gray-300 focus:outline-none p-1 rounded hover:bg-gray-700 md:hidden"
-            // md:hidden makes this button disappear on medium screens and up,
-            // because the sidebar itself is always visible (md:block)
-            aria-label={isOpen ? "Close sidebar" : "Open sidebar"}
-          >
-            <MenuIcon className="w-6 h-6" />
-          </button>
-        </div>
+          {/* Search */}
+          <div className="mb-4 relative">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full pl-10 pr-3 py-2 text-sm bg-gray-50 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-200 border border-gray-200"
+            />
+          </div>
 
-        {/* Search Input */}
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full p-2 text-sm bg-gray-800 rounded-md focus:outline-none placeholder-gray-500"
-          />
-        </div>
+          {/* Navigation */}
+          <nav className="flex-grow overflow-y-auto space-y-1">
+            <SidebarLink
+              href="/"
+              icon={<FaTachometerAlt className="w-4 h-4" />}
+              label="Dashboard"
+              isActive={activeLink === "/"}
+            />
+            <SidebarLink
+              href="/send"
+              icon={<FaPlus className="w-4 h-4" />}
+              label="Send Parcel"
+              isActive={activeLink === "/send"}
+            />
+            <SidebarLink
+              href="/waybill"
+              icon={<FaFileAlt className="w-4 h-4" />}
+              label="Create Waybill"
+              isActive={activeLink === "/waybill"}
+            />
+            <SidebarLink
+              href="/parcels"
+              icon={<FaBox className="w-4 h-4" />}
+              label="All Parcels"
+              isActive={activeLink === "/parcels"}
+            />
 
-        {/* Navigation Links - allow this part to scroll if content overflows */}
-        <nav className="flex-grow overflow-y-auto">
-          <SidebarLink href="/" icon={<FaTachometerAlt />} label="Dashboard" />
-          <SidebarLink href="/send" icon={<FaPlus />} label="Send Parcel" />
-          <SidebarLink
-            href="/waybill"
-            icon={<FaFileAlt />}
-            label="Create Waybill"
-          />
-          <SidebarLink href="/parcels" icon={<FaBox />} label="All Parcels" />
-          <SidebarLink
-            href="/awaiting-transit"
-            icon={<FaClock />}
-            label="Awaiting Transit"
-          />
-          <SidebarLink href="/on-transit" icon={<FaTruck />} label="On Transit" />
-          <SidebarLink
-            href="/awaiting-collection"
-            icon={<FaClock />}
-            label="Awaiting Collection"
-          />
-          <SidebarLink href="/collected" icon={<FaCheck />} label="Collected" />
-          <SidebarLink href="/trash" icon={<FaTrash />} label="Trash" />
-          <SidebarLink href="/towns" icon={<FaMapMarkedAlt />} label="Towns" />
-          <SidebarLink
-            href="/employees"
-            icon={<PersonStandingIcon />}
-            label="Employees"
-          />
-        </nav>
-      </div>
-    </aside>
+            <div className="pt-4 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Parcel Status
+            </div>
+
+            <SidebarLink
+              href="/awaiting-transit"
+              icon={<FaClock className="w-4 h-4" />}
+              label="Awaiting Transit"
+              isActive={activeLink === "/awaiting-transit"}
+            />
+            <SidebarLink
+              href="/on-transit"
+              icon={<FaTruck className="w-4 h-4" />}
+              label="On Transit"
+              isActive={activeLink === "/on-transit"}
+            />
+            <SidebarLink
+              href="/awaiting-collection"
+              icon={<FaClock className="w-4 h-4" />}
+              label="Awaiting Collection"
+              isActive={activeLink === "/awaiting-collection"}
+            />
+            <SidebarLink
+              href="/collected"
+              icon={<FaCheck className="w-4 h-4" />}
+              label="Collected"
+              isActive={activeLink === "/collected"}
+            />
+
+            <div className="pt-4 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Management
+            </div>
+
+            <SidebarLink
+              href="/trash"
+              icon={<FaTrash className="w-4 h-4" />}
+              label="Trash"
+              isActive={activeLink === "/trash"}
+            />
+            <SidebarLink
+              href="/towns"
+              icon={<FaMapMarkedAlt className="w-4 h-4" />}
+              label="Towns"
+              isActive={activeLink === "/towns"}
+            />
+            <SidebarLink
+              href="/employees"
+              icon={<PersonStandingIcon className="w-4 h-4" />}
+              label="Employees"
+              isActive={activeLink === "/employees"}
+            />
+          </nav>
+
+          {/* Footer */}
+          <div className="pt-4 border-t border-gray-200 mt-auto">
+            <div className="text-xs text-gray-500 px-4 pb-2">
+              © {new Date().getFullYear()} KETNO COURIER
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Backdrop for mobile */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black bg-opacity-50 md:hidden"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
-// SidebarLink component - added rounded-md for consistency
 function SidebarLink({
   href,
   icon,
   label,
+  isActive
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
+  isActive?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-800 rounded-md transition-colors"
+      className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg mx-2 transition-colors
+        ${isActive
+          ? "bg-indigo-50 text-indigo-700"
+          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"}`}
     >
-      <span className="text-lg">{icon}</span>
+      <span className={`${isActive ? "text-indigo-600" : "text-gray-400"}`}>
+        {icon}
+      </span>
       {label}
     </Link>
   );
