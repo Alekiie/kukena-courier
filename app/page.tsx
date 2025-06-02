@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import withAuth from "./components/withAuth";
 import { Bar } from "react-chartjs-2";
 import {
@@ -35,6 +35,10 @@ function Home() {
   const [showFilters, setShowFilters] = useState(true);
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
   // Set default date range to last 7 days
   useEffect(() => {
     const end = new Date();
@@ -45,7 +49,7 @@ function Home() {
     setToDate(end.toISOString().split('T')[0]);
   }, []);
 
-  const fetchManifest = async () => {
+  const fetchManifest = useCallback(async () => {
     if (!fromDate || !toDate) {
       setError("Please select both start and end dates");
       return;
@@ -79,6 +83,8 @@ function Home() {
       const data = await response.json();
       setManifest(data);
       processManifestForChart(data);
+      // Reset to first page when new data is fetched
+      setCurrentPage(1);
     } catch (err) {
       setError(err.message || "An error occurred");
       setManifest([]);
@@ -86,7 +92,14 @@ function Home() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [baseUrl, fromDate, toDate, selectedTownId]);
+
+  useEffect(() => {
+    // Fetch data when component mounts with default dates
+    if (fromDate && toDate) {
+      fetchManifest();
+    }
+  }, [fetchManifest, fromDate, toDate]);
 
   const processManifestForChart = (data: any[]) => {
     const counts: { [key: string]: number } = {};
@@ -97,6 +110,14 @@ function Home() {
     });
     setParcelCountsByOrigin(counts);
   };
+
+  // Get current items for pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = manifest.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(manifest.length / itemsPerPage);
+
+  const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   const chartData = {
     labels: Object.keys(parcelCountsByOrigin),
@@ -317,68 +338,101 @@ function Home() {
       <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Recent Shipments</h2>
-          <span className="text-sm text-gray-500">
-            {manifest.length} {manifest.length === 1 ? 'record' : 'records'} found
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">
+              Showing {Math.min(indexOfFirstItem + 1, manifest.length)} to {Math.min(indexOfLastItem, manifest.length)} of {manifest.length} records
+            </span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           {manifest.length > 0 ? (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tracking #
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Origin
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Destination
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Weight
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {manifest.map((parcel) => (
-                  <tr key={parcel.tracking_number} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
-                      {parcel.tracking_number}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {towns?.find(t => t.id === parcel.origin_town_id)?.name || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {towns?.find(t => t.id === parcel.destination_town_id)?.name || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {parcel.weight} kg
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${parcel.status === 'Delivered'
+            <>
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Tracking #
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Origin
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Destination
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Weight
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {currentItems.map((parcel) => (
+                    <tr key={parcel.tracking_number} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
+                        {parcel.tracking_number}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {towns?.find(t => t.id === parcel.origin_town_id)?.name || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {towns?.find(t => t.id === parcel.destination_town_id)?.name || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {parcel.weight} kg
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${parcel.status === 'Delivered'
                           ? 'bg-green-100 text-green-800'
                           : parcel.status === 'In Transit'
                             ? 'bg-amber-100 text-amber-800'
                             : 'bg-blue-100 text-blue-800'
-                        }`}>
-                        {parcel.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(parcel.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          }`}>
+                          {parcel.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(parcel.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4">
+                <div className="text-sm text-gray-700">
+                  Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => paginate(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className={`px-4 py-2 rounded-md text-sm font-medium ${currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => paginate(currentPage + 1)}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className={`px-4 py-2 rounded-md text-sm font-medium ${currentPage === totalPages || totalPages === 0
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="py-16 text-center">
               <FiAlertCircle className="mx-auto text-gray-400" size={48} />
