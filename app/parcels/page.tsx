@@ -35,7 +35,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { FiFilter, FiRefreshCw, FiInfo, FiSend, FiCalendar, FiSearch, FiPackage, FiTruck, FiUser, FiMapPin, FiDollarSign } from "react-icons/fi";
+import { FiFilter, FiRefreshCw, FiInfo, FiSend, FiCalendar, FiSearch, FiPackage, FiTruck, FiUser, FiMapPin, FiDollarSign, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { useTowns } from "../context/TownsContext";
 import { Badge } from "@/components/ui/badge";
 
@@ -98,6 +98,10 @@ export default function ParcelsPage() {
   const [newStatus, setNewStatus] = useState<ParcelStatus>("registered");
   const [isSubmittingStatus, setIsSubmittingStatus] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -131,6 +135,11 @@ export default function ParcelsPage() {
     baseUrl ? fetchParcels() : setError("API URL not configured");
   }, [baseUrl]);
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, startDate, endDate, selectedStatuses]);
+
   const handleStatusFilterChange = (status: ParcelStatus, checked: boolean) => {
     setSelectedStatuses(prev =>
       checked ? [...prev, status] : prev.filter(s => s !== status)
@@ -156,6 +165,12 @@ export default function ParcelsPage() {
 
     return matchesSearch && dateInRange && statusMatches;
   });
+
+  // Pagination calculations
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentParcels = filteredParcels.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredParcels.length / itemsPerPage);
 
   const handleOpenDetailsDialog = (parcel: Parcel) => {
     setSelectedParcel(parcel);
@@ -248,6 +263,7 @@ export default function ParcelsPage() {
       setLoading(true);
       setError(null);
       setSuccessMessage(null);
+      setCurrentPage(1);
       const token = localStorage.getItem("access_token");
       fetch(`${baseUrl}/parcels`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -267,6 +283,7 @@ export default function ParcelsPage() {
     setStartDate("");
     setEndDate("");
     setSelectedStatuses([]);
+    setCurrentPage(1);
   };
 
   if (!baseUrl) return (
@@ -304,7 +321,7 @@ export default function ParcelsPage() {
           </Button>
         </div>
 
-        {/* Stats Overview */}
+        {/* Stats*/}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-indigo-100 bg-indigo-50 shadow-sm">
             <CardContent className="p-4 flex items-center justify-between">
@@ -376,7 +393,7 @@ export default function ParcelsPage() {
           </Alert>
         )}
 
-        {/* Filters Card */}
+        {/* Filters Card (Wasn't sure it'd work.) */}
         <Card className="border border-gray-200 bg-white shadow-sm">
           <CardHeader className="pb-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -476,7 +493,7 @@ export default function ParcelsPage() {
           </CardContent>
         </Card>
 
-        {/* Parcels Table Card */}
+        {/* Parcels Table cd */}
         <Card className="border border-gray-200 bg-white shadow-sm overflow-hidden">
           <CardContent className="p-0">
             <Table className="border-collapse">
@@ -515,7 +532,7 @@ export default function ParcelsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredParcels.map(parcel => (
+                  currentParcels.map(parcel => (
                     <TableRow
                       key={parcel.tracking_number}
                       className="hover:bg-indigo-50 border-b border-gray-100"
@@ -576,15 +593,91 @@ export default function ParcelsPage() {
               </TableBody>
             </Table>
           </CardContent>
-          <CardFooter className="bg-indigo-50 px-6 py-3 border-t border-indigo-100">
+          <CardFooter className="bg-indigo-50 px-6 py-3 border-t border-indigo-100 flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-sm text-indigo-800">
-              Showing <span className="font-medium">{filteredParcels.length}</span> of{" "}
-              <span className="font-medium">{parcels.length}</span> shipments
+              Showing <span className="font-medium">
+                {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, filteredParcels.length)}
+              </span> of{" "}
+              <span className="font-medium">{filteredParcels.length}</span> shipments
+              {filteredParcels.length !== parcels.length && (
+                <span> (filtered from {parcels.length})</span>
+              )}
+            </div>
+            
+            {/* Pagination cntrls */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"
+              >
+                <FiChevronLeft className="w-4 h-4" />
+                Previous
+              </Button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "solid" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`min-w-[2rem] h-8 p-0 ${
+                        currentPage === pageNum 
+                          ? 'bg-indigo-600 text-white border-indigo-600' 
+                          : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <span className="px-2 text-indigo-600">...</span>
+                )}
+                
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="min-w-[2rem] h-8 p-0 border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                  >
+                    {totalPages}
+                  </Button>
+                )}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 flex items-center gap-1"
+              >
+                Next
+                <FiChevronRight className="w-4 h-4" />
+              </Button>
             </div>
           </CardFooter>
         </Card>
 
-        {/* Parcel Details Dialog */}
+     {/* Shipemnt dg */}
         <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
           <DialogContent className="sm:max-w-2xl rounded-xl border border-gray-200">
             <DialogHeader>
