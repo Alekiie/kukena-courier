@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import withAuth from "../components/withAuth";
-import { FiPackage, FiTruck, FiClock, FiCheckCircle, FiInfo } from "react-icons/fi";
+import { FiPackage, FiTruck, FiClock, FiCheckCircle, FiInfo, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { Badge } from "@/components/ui/badge";
 
 interface Parcel {
@@ -49,6 +49,10 @@ const ParcelStatusPage = ({ status, pageTitle }: ParcelStatusPageProps) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   useEffect(() => {
     const fetchParcels = async () => {
@@ -76,6 +80,17 @@ const ParcelStatusPage = ({ status, pageTitle }: ParcelStatusPageProps) => {
 
     fetchParcels();
   }, [status, baseUrl]);
+
+  // Reset to first page when status changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [status]);
+
+  // Pagination calculations
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentParcels = parcels.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(parcels.length / itemsPerPage);
 
   const StatusIcon = () => {
     switch (status) {
@@ -129,7 +144,7 @@ const ParcelStatusPage = ({ status, pageTitle }: ParcelStatusPageProps) => {
             </p>
           </div>
           <div className="text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
-            Showing {parcels.length} parcels
+            Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, parcels.length)} of {parcels.length} parcels
           </div>
         </div>
 
@@ -160,7 +175,7 @@ const ParcelStatusPage = ({ status, pageTitle }: ParcelStatusPageProps) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {parcels.length > 0 ? parcels.map((parcel) => (
+                {currentParcels.length > 0 ? currentParcels.map((parcel) => (
                   <tr key={parcel.tracking_number} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-indigo-600">
@@ -211,6 +226,84 @@ const ParcelStatusPage = ({ status, pageTitle }: ParcelStatusPageProps) => {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination Controls */}
+          {parcels.length > itemsPerPage && (
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="text-sm text-gray-700">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-1.5 rounded-lg border text-sm flex items-center gap-1 ${
+                    currentPage === 1 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FiChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`min-w-[2rem] h-8 rounded-lg text-sm ${
+                          currentPage === pageNum 
+                            ? 'bg-indigo-600 text-white' 
+                            : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <span className="px-2 text-gray-500">...</span>
+                  )}
+                  
+                  {totalPages > 5 && currentPage < totalPages - 2 && (
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      className="min-w-[2rem] h-8 rounded-lg bg-white border border-gray-300 text-gray-700 text-sm hover:bg-gray-50"
+                    >
+                      {totalPages}
+                    </button>
+                  )}
+                </div>
+                
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-1.5 rounded-lg border text-sm flex items-center gap-1 ${
+                    currentPage === totalPages 
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Next
+                  <FiChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
