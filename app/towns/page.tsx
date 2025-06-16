@@ -1,8 +1,7 @@
-// src/app/towns/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
-import { FiPlus, FiEdit2, FiTrash2, FiMapPin, FiPhone, FiHome } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiMapPin, FiPhone, FiHome, FiDollarSign } from "react-icons/fi";
 import {
   Table,
   TableBody,
@@ -25,6 +24,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTowns, Town } from "../context/TownsContext";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; 
 
 interface TownDialogProps {
   initialTownData: Town | null;
@@ -136,9 +136,138 @@ const TownDialog = ({
   );
 };
 
+// New component for pricing
+const RoutePricingDialog = ({
+  initialPricingData,
+  onSave,
+  onClose,
+}: {
+  initialPricingData: { origin_town_id: number, destination_town_id: number, price: number } | null;
+  onSave: (pricing: { origin_town_id: number, destination_town_id: number, price: number }) => Promise<void>;
+  onClose: () => void;
+}) => {
+  const { towns } = useTowns();
+  const [pricing, setPricing] = useState(initialPricingData || { origin_town_id: 0, destination_town_id: 0, price: 0 });
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setPricing(initialPricingData || { origin_town_id: 0, destination_town_id: 0, price: 0 });
+    setError(null);
+  }, [initialPricingData]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await onSave(pricing);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <DialogContent className="sm:max-w-md rounded-xl border border-gray-200 shadow-xl">
+      <DialogHeader>
+        <DialogTitle className="text-gray-800 flex items-center gap-2">
+          <FiDollarSign className="text-indigo-600" />
+          Set Route Pricing
+        </DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="origin" className="text-gray-700">Origin Town</Label>
+          <Select
+            id="origin"
+            required
+            value={pricing.origin_town_id.toString()}
+            onValueChange={(value) => setPricing({ ...pricing, origin_town_id: Number(value) })}
+            disabled={isSubmitting}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select Origin Town" />
+            </SelectTrigger>
+            <SelectContent>
+              {towns.map((town) => (
+                <SelectItem key={town.id} value={town.id.toString()}>
+                  {town.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="destination" className="text-gray-700">Destination Town</Label>
+          <Select
+            id="destination"
+            required
+            value={pricing.destination_town_id.toString()}
+            onValueChange={(value) => setPricing({ ...pricing, destination_town_id: Number(value) })}
+            disabled={isSubmitting}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select Destination Town" />
+            </SelectTrigger>
+            <SelectContent>
+              {towns.map((town) => (
+                <SelectItem key={town.id} value={town.id.toString()}>
+                  {town.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="price" className="text-gray-700">Price</Label>
+          <Input
+            id="price"
+            type="number"
+            required
+            value={pricing.price}
+            onChange={(e) => setPricing({ ...pricing, price: Number(e.target.value) })}
+            disabled={isSubmitting}
+            className="border-gray-300"
+          />
+        </div>
+        {error && <p className="text-red-500 text-sm py-2">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              className="border-gray-300"
+            >
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                {isSubmitting ? "Saving..." : "Set Pricing"}
+              </span>
+            ) : "Set Pricing"}
+          </Button>
+        </div>
+      </form>
+    </DialogContent>
+  );
+};
+
 export default function TownsPage() {
-  const { towns, createTown, updateTown, loading, fetchTowns } = useTowns();
-  const [dialogState, setDialogState] = useState<"add" | Town | null>(null);
+  const { towns, createTown, updateTown, loading, fetchTowns, setRoutePricing } = useTowns();
+  const [dialogState, setDialogState] = useState<"add" | "routePricing" | Town | null>(null);
 
   const handleApiError = (error: any, action: string) => {
     console.error(`Error ${action} town:`, error);
@@ -147,6 +276,8 @@ export default function TownsPage() {
 
   const handleOpenAddDialog = () => setDialogState("add");
   const handleOpenEditDialog = (town: Town) => setDialogState(town);
+  const handleOpenRoutePricingDialog = () => setDialogState("routePricing");
+
   const handleCloseDialog = () => setDialogState(null);
 
   const handleSaveTown = async (townData: { id?: number; name: string; phone: string; address: string }) => {
@@ -162,10 +293,37 @@ export default function TownsPage() {
     }
   };
 
+  const handleSavePricing = async (pricing: { origin_town_id: number; destination_town_id: number; price: number }) => {
+  try {
+    const token = localStorage.getItem("access_token");
+    if (!token) throw new Error("Authentication token is missing.");
+
+    // API URL to save the route pricing
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/pricing`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(pricing),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to set pricing.");
+    }
+
+    // Success handling (you can handle success message and refresh logic here)
+    alert("Pricing set successfully!");
+  } catch (error) {
+    console.error("Error setting pricing:", error);
+    alert(`Error: ${error.message}`);
+  }
+};
+
+
   const isDialogOpen = dialogState !== null;
-  const initialTownDataForDialog = dialogState && typeof dialogState === 'object'
-    ? dialogState
-    : null;
+  const initialTownDataForDialog = dialogState && typeof dialogState === 'object' ? dialogState : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-4 sm:p-6">
@@ -190,31 +348,32 @@ export default function TownsPage() {
           </Button>
         </div>
 
+        <Button
+          onClick={handleOpenRoutePricingDialog}
+          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 mb-8"
+        >
+          <FiDollarSign className="w-4 h-4" />
+          Set Route Pricing
+        </Button>
+
         {/* Single Dialog for both Add and Edit */}
         <Dialog open={isDialogOpen} onOpenChange={open => !open && handleCloseDialog()}>
           {isDialogOpen && (
-            <TownDialog
-              initialTownData={initialTownDataForDialog}
-              onSave={handleSaveTown}
-              onClose={handleCloseDialog}
-            />
+            dialogState === "routePricing" ? (
+              <RoutePricingDialog
+                initialPricingData={null}
+                onSave={handleSavePricing}
+                onClose={handleCloseDialog}
+              />
+            ) : (
+              <TownDialog
+                initialTownData={initialTownDataForDialog}
+                onSave={handleSaveTown}
+                onClose={handleCloseDialog}
+              />
+            )
           )}
         </Dialog>
-
-        {/* Stats Card */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="border border-indigo-100 bg-indigo-50 shadow-sm">
-            <CardContent className="p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-indigo-600 font-medium">Total Branches</p>
-                <p className="text-2xl font-bold text-gray-900 mt-1">{towns.length}</p>
-              </div>
-              <div className="bg-indigo-100 p-3 rounded-full">
-                <FiMapPin className="text-indigo-600 w-5 h-5" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* Towns Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -312,16 +471,3 @@ export default function TownsPage() {
     </div>
   );
 }
-
-// Card components for better structure
-const Card = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={`rounded-xl border ${className}`}>
-    {children}
-  </div>
-);
-
-const CardContent = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={`p-4 ${className}`}>
-    {children}
-  </div>
-);

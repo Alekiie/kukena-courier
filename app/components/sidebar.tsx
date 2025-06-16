@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";  // Updated for Next.js 13 (App Router)
 import {
   FaTachometerAlt,
   FaPlus,
@@ -26,11 +27,12 @@ interface CustomJwtPayload extends DecodedJwtPayload {
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
-  const [activeLink, setActiveLink] = useState("");
+  const [activeLink, setActiveLink] = useState<string>('');
+  const pathname = usePathname();  // Using Next.js App Router hook to get current path
 
   useEffect(() => {
-    // Set active link based on current path
-    setActiveLink(window.location.pathname);
+    // Update active link whenever the pathname changes
+    setActiveLink(pathname);
 
     const token = localStorage.getItem("access_token");
     if (!token) return;
@@ -41,7 +43,7 @@ export default function Sidebar() {
     } catch (e) {
       console.error("Failed to decode token:", e);
     }
-  }, []);
+  }, [pathname]);  // The effect runs whenever the pathname changes
 
   return (
     <>
@@ -93,24 +95,28 @@ export default function Sidebar() {
               icon={<FaTachometerAlt className="w-4 h-4" />}
               label="Dashboard"
               isActive={activeLink === "/"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/send"
               icon={<FaPlus className="w-4 h-4" />}
               label="Send Parcel"
               isActive={activeLink === "/send"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/waybill"
               icon={<FaFileAlt className="w-4 h-4" />}
               label="Create Waybill"
               isActive={activeLink === "/waybill"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/parcels"
               icon={<FaBox className="w-4 h-4" />}
               label="All Parcels"
               isActive={activeLink === "/parcels"}
+              onClick={() => setIsOpen(false)}
             />
 
             <div className="pt-4 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -122,24 +128,28 @@ export default function Sidebar() {
               icon={<FaClock className="w-4 h-4" />}
               label="Awaiting Transit"
               isActive={activeLink === "/awaiting-transit"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/on-transit"
               icon={<FaTruck className="w-4 h-4" />}
               label="On Transit"
               isActive={activeLink === "/on-transit"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/awaiting-collection"
               icon={<FaClock className="w-4 h-4" />}
               label="Awaiting Collection"
               isActive={activeLink === "/awaiting-collection"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/collected"
               icon={<FaCheck className="w-4 h-4" />}
               label="Collected"
               isActive={activeLink === "/collected"}
+              onClick={() => setIsOpen(false)}
             />
 
             <div className="pt-4 pb-1 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -151,18 +161,21 @@ export default function Sidebar() {
               icon={<FaTrash className="w-4 h-4" />}
               label="Trash"
               isActive={activeLink === "/trash"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/towns"
               icon={<FaMapMarkedAlt className="w-4 h-4" />}
               label="Towns"
               isActive={activeLink === "/towns"}
+              onClick={() => setIsOpen(false)}
             />
             <SidebarLink
               href="/employees"
               icon={<PersonStandingIcon className="w-4 h-4" />}
               label="Employees"
               isActive={activeLink === "/employees"}
+              onClick={() => setIsOpen(false)}
             />
           </nav>
 
@@ -190,16 +203,19 @@ function SidebarLink({
   href,
   icon,
   label,
-  isActive
+  isActive,
+  onClick,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
-  isActive?: boolean;
+  isActive: boolean;
+  onClick?: () => void;
 }) {
   return (
     <Link
       href={href}
+      onClick={onClick}
       className={`flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg mx-2 transition-colors
         ${isActive
           ? "bg-indigo-50 text-indigo-700"

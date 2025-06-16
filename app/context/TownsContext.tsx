@@ -1,4 +1,3 @@
-// src/app/context/TownsContext.tsx
 "use client";
 
 import {
@@ -17,13 +16,20 @@ export interface Town {
   phone: string;
 }
 
+export interface RoutePricing {
+  origin_town_id: number;
+  destination_town_id: number;
+  price: number;
+}
+
 interface TownContextType {
   towns: Town[];
   loading: boolean;
   fetchTowns: () => Promise<void>;
   createTown: (town: Omit<Town, "id">) => Promise<void>;
   updateTown: (town: Town) => Promise<void>;
-  // deleteTown: (townId: number) => Promise<void>; // If you implement delete
+  routePricing: RoutePricing[];
+  setRoutePricing: (pricing: RoutePricing) => void;
 }
 
 const TownContext = createContext<TownContextType | undefined>(undefined);
@@ -32,6 +38,7 @@ export const TownProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const [towns, setTowns] = useState<Town[]>([]);
+  const [routePricing, setRoutePricing] = useState<RoutePricing[]>([]); // State for route pricing
   const [loading, setLoading] = useState(true);
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -115,6 +122,11 @@ export const TownProvider: React.FC<{ children: ReactNode }> = ({
     [baseUrl]
   );
 
+  // Adding the logic for setting route pricing
+  const setRoutePricingFn = (pricing: RoutePricing) => {
+    setRoutePricing((prevPricing) => [...prevPricing, pricing]);
+  };
+
   useEffect(() => {
     if (baseUrl) {
         fetchTowns();
@@ -132,6 +144,8 @@ export const TownProvider: React.FC<{ children: ReactNode }> = ({
         fetchTowns,
         createTown,
         updateTown,
+        routePricing,
+        setRoutePricing: setRoutePricingFn,
       }}
     >
       {children}

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import withAuth from "./components/withAuth";
 import { Bar } from "react-chartjs-2";
 import {
@@ -12,7 +12,7 @@ import {
   Legend,
 } from "chart.js";
 import { useTowns } from "./context/TownsContext";
-import { FiFilter, FiRefreshCw, FiAlertCircle, FiChevronDown } from "react-icons/fi";
+import { FiFilter, FiRefreshCw, FiAlertCircle, FiChevronDown, FiX, FiCalendar, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 
 ChartJS.register(
   CategoryScale,
@@ -33,6 +33,7 @@ function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showFilters, setShowFilters] = useState(true);
+  const [sortConfig, setSortConfig] = useState({ key: "created_at", direction: "desc" });
   const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   // Pagination state
@@ -48,6 +49,16 @@ function Home() {
     setFromDate(start.toISOString().split('T')[0]);
     setToDate(end.toISOString().split('T')[0]);
   }, []);
+
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError("");
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const fetchManifest = useCallback(async () => {
     if (!fromDate || !toDate) {
@@ -83,7 +94,6 @@ function Home() {
       const data = await response.json();
       setManifest(data);
       processManifestForChart(data);
-      // Reset to first page when new data is fetched
       setCurrentPage(1);
     } catch (err) {
       setError(err.message || "An error occurred");
@@ -95,7 +105,6 @@ function Home() {
   }, [baseUrl, fromDate, toDate, selectedTownId]);
 
   useEffect(() => {
-    // Fetch data when component mounts with default dates
     if (fromDate && toDate) {
       fetchManifest();
     }
@@ -111,11 +120,35 @@ function Home() {
     setParcelCountsByOrigin(counts);
   };
 
+  const handleSort = (key: string) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedManifest = useMemo(() => {
+    const sortableItems = [...manifest];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [manifest, sortConfig]);
+
   // Get current items for pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = manifest.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(manifest.length / itemsPerPage);
+  const currentItems = sortedManifest.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedManifest.length / itemsPerPage);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
@@ -127,6 +160,7 @@ function Home() {
         data: Object.values(parcelCountsByOrigin),
         backgroundColor: "rgba(79, 70, 229, 0.8)",
         borderRadius: 6,
+        borderSkipped: false,
       },
     ],
   };
@@ -138,11 +172,27 @@ function Home() {
       legend: {
         display: false
       },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+        titleFont: {
+          size: 14
+        },
+        bodyFont: {
+          size: 13
+        },
+        cornerRadius: 4
+      },
       title: {
         display: true,
         text: "Parcels by Origin Town",
         font: {
-          size: 16
+          size: 16,
+          weight: '600',
+          family: "'Inter', sans-serif"
+        },
+        padding: {
+          bottom: 20
         }
       },
     },
@@ -151,6 +201,9 @@ function Home() {
         beginAtZero: true,
         grid: {
           color: "rgba(0,0,0,0.05)"
+        },
+        ticks: {
+          stepSize: 1
         }
       },
       x: {
@@ -158,11 +211,22 @@ function Home() {
           display: false
         }
       }
+    },
+    animation: {
+      duration: 500
     }
   };
 
+  const applyQuickDateRange = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - days);
+    setFromDate(start.toISOString().split('T')[0]);
+    setToDate(end.toISOString().split('T')[0]);
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-2 lg:px-8 py-8 w-full">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
@@ -173,7 +237,7 @@ function Home() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+            className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
           >
             <FiFilter size={16} />
             {showFilters ? "Hide Filters" : "Show Filters"}
@@ -181,18 +245,21 @@ function Home() {
           <button
             onClick={fetchManifest}
             disabled={isLoading}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300
               ${isLoading
                 ? "bg-indigo-400 cursor-not-allowed"
-                : "bg-indigo-600 hover:bg-indigo-700"} text-white`}
+                : "bg-indigo-600 hover:bg-indigo-700 shadow-sm hover:shadow-md"} text-white`}
           >
             {isLoading ? (
               <>
                 <FiRefreshCw className="animate-spin" size={18} />
-                Loading...
+                <span>Loading...</span>
               </>
             ) : (
-              "Refresh Data"
+              <>
+                <FiRefreshCw size={18} />
+                <span>Refresh Data</span>
+              </>
             )}
           </button>
         </div>
@@ -200,10 +267,11 @@ function Home() {
 
       {/* Filters */}
       {showFilters && (
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm p-6 mb-8 border border-gray-100 transition-all duration-300">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                <FiCalendar className="mr-2" size={16} />
                 Start Date
               </label>
               <input
@@ -215,7 +283,8 @@ function Home() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center">
+                <FiCalendar className="mr-2" size={16} />
                 End Date
               </label>
               <input
@@ -247,29 +316,63 @@ function Home() {
               </div>
             </div>
 
-            <div className="flex items-end">
-              <button
-                onClick={fetchManifest}
-                disabled={isLoading}
-                className={`w-full py-3 px-4 rounded-lg font-medium transition-colors
-                  ${isLoading
-                    ? "bg-indigo-400 cursor-not-allowed"
-                    : "bg-indigo-600 hover:bg-indigo-700"} text-white`}
-              >
-                Generate Report
-              </button>
+            <div className="flex flex-col justify-end">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedTownId("all");
+                    applyQuickDateRange(7);
+                  }}
+                  className="flex-1 py-2.5 text-sm rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={fetchManifest}
+                  disabled={isLoading}
+                  className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors
+                    ${isLoading
+                      ? "bg-indigo-400 cursor-not-allowed"
+                      : "bg-indigo-600 hover:bg-indigo-700"} text-white`}
+                >
+                  Apply
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button 
+                  onClick={() => applyQuickDateRange(0)}
+                  className="text-xs px-2.5 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                >
+                  Today
+                </button>
+                <button 
+                  onClick={() => applyQuickDateRange(7)}
+                  className="text-xs px-2.5 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                >
+                  Last 7 Days
+                </button>
+                <button 
+                  onClick={() => applyQuickDateRange(30)}
+                  className="text-xs px-2.5 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                >
+                  Last 30 Days
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-8 flex items-start">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-8 flex items-start animate-fadeIn">
           <FiAlertCircle className="text-red-500 mt-0.5 mr-3 flex-shrink-0" size={20} />
-          <div>
+          <div className="flex-1">
             <p className="text-red-700 font-medium">{error}</p>
             <p className="text-red-600 text-sm mt-1">Please check your filters and try again</p>
           </div>
+          <button onClick={() => setError("")} className="text-red-500 hover:text-red-700">
+            <FiX size={20} />
+          </button>
         </div>
       )}
 
@@ -281,7 +384,11 @@ function Home() {
             <h2 className="text-lg font-semibold text-gray-900">Parcel Distribution</h2>
           </div>
 
-          {Object.keys(parcelCountsByOrigin).length > 0 ? (
+          {isLoading ? (
+            <div className="h-80 flex items-center justify-center">
+              <div className="animate-pulse w-full h-full rounded-lg bg-gray-100" />
+            </div>
+          ) : Object.keys(parcelCountsByOrigin).length > 0 ? (
             <div className="h-80">
               <Bar data={chartData} options={chartOptions} />
             </div>
@@ -300,59 +407,89 @@ function Home() {
         <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Overview</h2>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-indigo-50 rounded-lg p-5">
-              <p className="text-sm font-medium text-indigo-600 mb-1">Total Parcels</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {manifest.length}
-              </p>
+          {isLoading ? (
+            <div className="grid grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map((item) => (
+                <div key={item} className="bg-gray-50 rounded-lg p-5 animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-indigo-50 rounded-lg p-5 transition-all hover:shadow-sm">
+                <p className="text-sm font-medium text-indigo-600 mb-1">Total Parcels</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {manifest.length}
+                </p>
+              </div>
 
-            <div className="bg-green-50 rounded-lg p-5">
-              <p className="text-sm font-medium text-green-600 mb-1">Unique Origins</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {Object.keys(parcelCountsByOrigin).length}
-              </p>
-            </div>
+              <div className="bg-green-50 rounded-lg p-5 transition-all hover:shadow-sm">
+                <p className="text-sm font-medium text-green-600 mb-1">Unique Origins</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {Object.keys(parcelCountsByOrigin).length}
+                </p>
+              </div>
 
-            <div className="bg-amber-50 rounded-lg p-5">
-              <p className="text-sm font-medium text-amber-600 mb-1">Avg. Weight</p>
-              <p className="text-3xl font-bold text-gray-900">
-                {manifest.length ?
-                  (manifest.reduce((sum, p) => sum + parseFloat(p.weight), 0) / manifest.length).toFixed(2) + 'kg' :
-                  '0kg'}
-              </p>
-            </div>
+              <div className="bg-amber-50 rounded-lg p-5 transition-all hover:shadow-sm">
+                <p className="text-sm font-medium text-amber-600 mb-1">Avg. Weight</p>
+                <p className="text-3xl font-bold text-gray-900">
+                  {manifest.length ?
+                    (manifest.reduce((sum, p) => sum + parseFloat(p.weight), 0) / manifest.length).toFixed(2) + 'kg' :
+                    '0kg'}
+                </p>
+              </div>
 
-            <div className="bg-purple-50 rounded-lg p-5">
-              <p className="text-sm font-medium text-purple-600 mb-1">Date Range</p>
-              <p className="text-lg font-bold text-gray-900">
-                {fromDate} to {toDate}
-              </p>
+              <div className="bg-purple-50 rounded-lg p-5 transition-all hover:shadow-sm">
+                <p className="text-sm font-medium text-purple-600 mb-1">Date Range</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {fromDate} to {toDate}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Parcel Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className="text-lg font-semibold text-gray-900">Recent Shipments</h2>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-gray-500">
               Showing {Math.min(indexOfFirstItem + 1, manifest.length)} to {Math.min(indexOfLastItem, manifest.length)} of {manifest.length} records
             </span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          {manifest.length > 0 ? (
+          {isLoading ? (
+            <div className="p-6">
+              <div className="animate-pulse space-y-4">
+                <div className="h-12 bg-gray-100 rounded-lg"></div>
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="h-14 bg-gray-100 rounded-lg"></div>
+                ))}
+              </div>
+            </div>
+          ) : manifest.length > 0 ? (
             <>
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tracking #
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('tracking_number')}
+                    >
+                      <div className="flex items-center">
+                        Tracking #
+                        {sortConfig.key === 'tracking_number' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Origin
@@ -360,14 +497,34 @@ function Home() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Destination
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Weight
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('weight')}
+                    >
+                      <div className="flex items-center">
+                        Weight
+                        {sortConfig.key === 'weight' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
+                    <th 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => handleSort('created_at')}
+                    >
+                      <div className="flex items-center">
+                        Date
+                        {sortConfig.key === 'created_at' && (
+                          <span className="ml-1">
+                            {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          </span>
+                        )}
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -405,30 +562,57 @@ function Home() {
               </table>
 
               {/* Pagination Controls */}
-              <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between border-t border-gray-200 px-6 py-4 gap-4">
                 <div className="text-sm text-gray-700">
                   Page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex items-center space-x-2">
                   <button
                     onClick={() => paginate(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className={`px-4 py-2 rounded-md text-sm font-medium ${currentPage === 1
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    className={`p-2 rounded-md ${currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                       }`}
                   >
-                    Previous
+                    <FiChevronLeft size={16} />
                   </button>
+                  
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => paginate(pageNum)}
+                        className={`w-10 h-10 rounded-md text-sm font-medium ${currentPage === pageNum
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  
                   <button
                     onClick={() => paginate(currentPage + 1)}
                     disabled={currentPage === totalPages || totalPages === 0}
-                    className={`px-4 py-2 rounded-md text-sm font-medium ${currentPage === totalPages || totalPages === 0
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    className={`p-2 rounded-md ${currentPage === totalPages || totalPages === 0
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
                       }`}
                   >
-                    Next
+                    <FiChevronRight size={16} />
                   </button>
                 </div>
               </div>

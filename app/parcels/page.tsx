@@ -38,6 +38,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FiFilter, FiRefreshCw, FiInfo, FiSend, FiCalendar, FiSearch, FiPackage, FiTruck, FiUser, FiMapPin, FiDollarSign, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import { useTowns } from "../context/TownsContext";
 import { Badge } from "@/components/ui/badge";
+import { FaRegistered } from "react-icons/fa";
 
 type Parcel = {
   tracking_number: string;
@@ -338,6 +339,19 @@ export default function ParcelsPage() {
           <Card className="border border-blue-100 bg-blue-50 shadow-sm">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
+                <p className="text-sm text-blue-600 font-medium">Registered</p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {parcels.filter(p => p.status === "registered").length}
+                </p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-full">
+                <FaRegistered className="text-blue-600 w-6 h-6" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border border-blue-100 bg-blue-50 shadow-sm">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div>
                 <p className="text-sm text-blue-600 font-medium">In Transit</p>
                 <p className="text-2xl font-bold text-gray-900 mt-1">
                   {parcels.filter(p => p.status === "in_transit").length}
@@ -460,7 +474,7 @@ export default function ParcelsPage() {
                 <Label className="text-sm text-gray-600 mb-1 block">Status Filter</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full pl-10 p-3 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+                    <Button variant="outline" className="cursor-pointer w-full pl-10 p-3 rounded-lg border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
                     >
                       <FiFilter className="mr-2" />
                       {selectedStatuses.length > 0
@@ -469,17 +483,18 @@ export default function ParcelsPage() {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-60 p-4 border border-gray-200">
-                    <div className="space-y-3">
+                    <div className="space-y-3 cursor-pointer">
                       {VALID_PARCEL_STATUSES.map(status => (
-                        <div key={status} className="flex items-center space-x-2">
+                        <div key={status} className="flex items-center space-x-2 cursor-pointer">
                           <Checkbox
                             id={status}
                             checked={selectedStatuses.includes(status)}
                             onCheckedChange={checked =>
                               handleStatusFilterChange(status, !!checked)
                             }
+                            className="cursor-pointer"
                           />
-                          <Label htmlFor={status} className="capitalize text-sm flex items-center gap-2">
+                          <Label htmlFor={status} className="capitalize text-sm flex items-center gap-2 cursor-pointer">
                             <span className={`w-3 h-3 rounded-full ${statusColors[status].split(' ')[0]}`}></span>
                             {status.replace('_', ' ')}
                           </Label>
